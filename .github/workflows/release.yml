@@ -1,0 +1,49 @@
+name: Build and release
+
+on:
+  push:
+    tags: ['v*']        # e.g. git tag v1.0.0 && git push --tags
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows, fmt: zip,   ext: zip }
+          - { os: macos-latest,   name: macos,   fmt: gztar, ext: tar.gz }
+          - { os: ubuntu-latest,  name: linux,   fmt: gztar, ext: tar.gz }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt pyinstaller
+      - name: Download Chart.js and Font Awesome into the bundle
+        run: python frontend/vendor.py
+      - name: Build
+        run: cd backend && pyinstaller --noconfirm InventoryManager.spec
+      - name: Package
+        run: |
+          cd backend/dist
+          python -c "import shutil; shutil.make_archive('../../IMS-${{ matrix.name }}', '${{ matrix.fmt }}', '.')"
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: IMS-${{ matrix.name }}.${{ matrix.ext }}
+      - name: Keep as workflow artifact (manual runs)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMS-${{ matrix.name }}
+          path: IMS-${{ matrix.name }}.${{ matrix.ext }}

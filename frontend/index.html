@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Manager</title>
+
+    <!-- Tachometer Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233498db'><path d='M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z'/></svg>">
+
+    <link rel="stylesheet" href="styles.css">
+    <!-- Local copies of third-party libraries (installed once by `python vendor.py`) -->
+    <link href="vendor/fontawesome/css/all.min.css" rel="stylesheet">
+    <script src="vendor/chart.umd.min.js"></script>
+    <script>
+        // If the vendor files are missing, keep the app running without charts
+        if (typeof Chart === 'undefined') {
+            window.Chart = function () { this.destroy = function () {}; };
+            document.addEventListener('DOMContentLoaded', function () {
+                var b = document.createElement('div');
+                b.style.cssText = 'background:#fff3cd;color:#664d03;padding:8px 16px;text-align:center;font-size:14px';
+                b.textContent = 'Charts are disabled: run "python vendor.py" once (while online) to install them for offline use.';
+                document.body.prepend(b);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i class="fas fa-warehouse"></i>
+                <span class="brand-text">Inventory Manager</span>
+            </div>
+
+            <!-- Hamburger menu for mobile -->
+            <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            
+            <div class="nav-links" id="nav-links">
+                <a href="#" class="nav-link active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i> <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="#" class="nav-link" data-page="products">
+                    <i class="fas fa-boxes"></i> <span class="nav-text">Products</span>
+                </a>
+                <a href="#" class="nav-link" data-page="sales">
+                    <i class="fas fa-chart-line"></i> <span class="nav-text">Sales</span>
+                </a>
+                <a href="#" class="nav-link" data-page="analytics">
+                    <i class="fas fa-chart-bar"></i> <span class="nav-text">Analytics</span>
+                </a>
+            </div>
+
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="page-header">
+                    <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+                    <div class="refresh-controls">
+                        <span class="last-updated" id="dashboard-last-updated"></span>
+                        <button class="btn btn-primary refresh-btn" id="refresh-dashboard-btn">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid" id="stats-cards">
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Loading dashboard data...</span>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="charts-row">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-chart-pie"></i> Products by Category
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="stockChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="stockChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-chart-line"></i> Sales Trend (Last 30 Days)
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="salesChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Low Stock Alert -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-exclamation-triangle"></i> Low Stock Alert</h2>
+                    </div>
+                    <div id="low-stock-alerts">
+                        <div class="loading-placeholder">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading stock alerts...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Sellers -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-trophy"></i> Top Selling Products</h2>
+                    </div>
+                    <div id="top-sellers">
+                        <div class="loading-placeholder">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading top sellers...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Page -->
+            <div id="products-page" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-boxes"></i> Product Management</h1>
+                    <button class="btn btn-primary" id="add-product-btn">
+                        <i class="fas fa-plus"></i> <span class="btn-text">Add Product</span>
+                    </button>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="Search products...">
+                        <select id="search-by">
+                            <option value="name">Name</option>
+                            <option value="category">Category</option>
+                            <option value="id">ID</option>
+                        </select>
+                        <button id="search-btn" class="btn btn-secondary">
+                            <i class="fas fa-search"></i> <span class="btn-text">Search</span>
+                        </button>
+                        <button id="clear-search" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> <span class="btn-text">Clear</span>
+                        </button>
+                    </div>
+
+                    <!-- Sort Controls -->
+                    <div class="sort-controls">
+                        <label for="sort-by-select">Sort by:</label>
+                        <select id="sort-by-select">
+                            <option value="name">Name</option>
+                            <option value="category">Category</option>
+                            <option value="price">Price</option>
+                            <option value="quantity">Stock</option>
+                            <option value="total_sold">Sold</option>
+                        </select>
+
+                        <label for="sort-order-select">Order:</label>
+                        <select id="sort-order-select">
+                            <option value="asc">Ascending</option>
+                            <option value="desc">Descending</option>
+                        </select>
+                    </div>
+
+                    <div class="per-page-selector">
+                        <label for="per-page-select">Items per page:</label>
+                        <select id="per-page-select">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Products Table -->
+                <div class="table-container">
+                    <table id="products-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Sold</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-tbody">
+                            <tr>
+                                <td colspan="8" class="loading-placeholder">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <span>Loading products...</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Products Pagination -->
+                <div id="products-pagination"></div>
+            </div>
+
+            <!-- Sales Page -->
+            <div id="sales-page" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-chart-line"></i> Sales Management</h1>
+                    <div class="refresh-controls">
+                        <span class="last-updated" id="sales-last-updated"></span>
+                        <button class="btn btn-primary refresh-btn" id="refresh-sales-btn">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Sale Form -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-cash-register"></i> Quick Sale</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="quick-sale-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="sale-product">Product</label>
+                                    <select id="sale-product" required>
+                                        <option value="">Loading products...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sale-quantity">Quantity</label>
+                                    <input type="number" id="sale-quantity" min="1" value="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-shopping-cart"></i> <span class="btn-text">Process Sale</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Sales History -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-history"></i> Recent Sales</h2>
+                    </div>
+                    <div class="table-container">
+                        <table id="sales-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-tbody">
+                                <tr>
+                                    <td colspan="5" class="loading-placeholder">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Loading sales history...</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Sales Pagination -->
+                    <div id="sales-pagination"></div>
+                </div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div id="analytics-page" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-chart-bar"></i> Analytics & Reports</h1>
+                    <div class="refresh-controls">
+                        <span class="last-updated" id="analytics-last-updated"></span>
+                        <button class="btn btn-primary refresh-btn" id="refresh-analytics-btn">
+                            <i class="fas fa-refresh"></i> Refresh Charts
+                        </button>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-chart-bar"></i> Inventory Value by Category
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="categoryValueChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="categoryValueChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-chart-line"></i> Revenue Trend (Last 30 Days)
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="salesTrendChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="salesTrendChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-chart-pie"></i> Stock Distribution
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="stockDistributionChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="stockDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <i class="fas fa-trophy"></i> Top Products by Revenue
+                            </div>
+                        </div>
+                        <div class="chart-loading" id="revenueChart-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading chart data...</span>
+                        </div>
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Add Product</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="product-form">
+                <div class="modal-body">
+                    <input type="hidden" id="product-id">
+                    <div class="form-group">
+                        <label for="product-name">Product Name *</label>
+                        <input type="text" id="product-name" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="product-category">Category *</label>
+                            <input type="text" id="product-category" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="product-price">Price ($) *</label>
+                            <input type="number" id="product-price" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="product-quantity">Initial Quantity *</label>
+                            <input type="number" id="product-quantity" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="product-reorder">Reorder Level</label>
+                            <input type="number" id="product-reorder" min="0" value="5">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-id">Custom ID (optional)</label>
+                        <input type="text" id="custom-id" placeholder="Leave empty for auto-generated">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="save-btn">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="stock-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Update Stock</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="stock-form">
+                <div class="modal-body">
+                    <input type="hidden" id="stock-product-id">
+                    <div class="form-group">
+                        <label>Product: <span id="stock-product-name"></span></label>
+                    </div>
+                    <div class="form-group">
+                        <label>Current Stock: <span id="current-stock"></span></label>
+                    </div>
+                    <div class="form-group">
+                        <label for="stock-action">Action</label>
+                        <select id="stock-action">
+                            <option value="restock">Restock</option>
+                            <option value="sale">Sale</option>
+                            <option value="adjust">Adjust</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="stock-quantity">Quantity *</label>
+                        <input type="number" id="stock-quantity" min="1" value="1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-stock-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

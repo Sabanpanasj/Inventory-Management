@@ -1,0 +1,8 @@
+.env
+*.db
+__pycache__/
+*.pyc
+frontend/vendor/
+backend/build/
+backend/dist/
+wheels/
